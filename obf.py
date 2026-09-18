@@ -367,8 +367,12 @@ async def _0x_search(query: str):
             'source_address': '0.0.0.0',
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'ios', 'web'],
-                    'player_skip': ['webpage', 'configs']
+                    'player_client': ['android_vr', 'ios', 'android'],
+                    'player_skip': ['webpage', 'configs', 'js']
+                },
+                'youtubepartner': {
+                    'player_client': ['android_vr', 'ios', 'android'],
+                    'player_skip': ['webpage', 'configs', 'js']
                 }
             }
         }
@@ -431,24 +435,7 @@ async def _0x_search(query: str):
             except Exception as e:
                 _0x_log.error(f"Primary extraction error: {e}")
 
-            # 2. Secondary search with YouTube Music if not link
-            if not is_link:
-                try:
-                    alt_query = f"ytmsearch1:{query}"
-                    info = ydl.extract_info(alt_query, download=False)
-                    if info:
-                        if 'entries' in info and info['entries']:
-                            parsed = _resolve_result(info['entries'][0])
-                            if parsed and parsed.get('stream_url'):
-                                return parsed
-                        elif 'entries' not in info:
-                            parsed = _resolve_result(info)
-                            if parsed and parsed.get('stream_url'):
-                                return parsed
-                except Exception as e:
-                    _0x_log.error(f"Secondary extraction error: {e}")
-
-            # 3. Tertiary search with standard ytsearch3 (fallback to top 3)
+            # 2. Secondary search with standard ytsearch3 (fallback to top 3)
             if not is_link:
                 try:
                     alt_query = f"ytsearch3:{query}"
@@ -460,7 +447,7 @@ async def _0x_search(query: str):
                                 if parsed and parsed.get('stream_url'):
                                     return parsed
                 except Exception as e:
-                    _0x_log.error(f"Tertiary extraction error: {e}")
+                    _0x_log.error(f"Secondary extraction error: {e}")
 
             return None
 
