@@ -1,0 +1,5 @@
+.env
+database.db
+cookies.txt
+__pycache__/
+*.pyc
