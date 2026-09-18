@@ -335,8 +335,32 @@ _0x_ck = os.path.join(_0x_dir, "cookies.txt")
 async def _0x_search(query: str):
     def _extract():
         is_link = query.startswith("http://") or query.startswith("https://")
-        search_query = query if is_link else f"ytsearch1:{query}"
+        video_urls = [query] if is_link else []
         
+        if not is_link:
+            try:
+                search_url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(query)
+                req = urllib.request.Request(
+                    search_url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept-Language": "en-US,en;q=0.9"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    html = resp.read().decode("utf-8", errors="ignore")
+                    ids = re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', html)
+                    if ids:
+                        seen = set()
+                        unique_ids = [x for x in ids if not (x in seen or seen.add(x))]
+                        for vid in unique_ids[:3]:
+                            video_urls.append(f"https://www.youtube.com/watch?v={vid}")
+            except Exception as e:
+                _0x_log.error(f"HTML search error: {e}")
+
+        if not video_urls:
+            video_urls = [f"ytsearch1:{query}"]
+
         has_cookie = os.path.exists(_0x_ck) and os.path.getsize(_0x_ck) > 20
         
         def _get_opts(use_cookie=False, clients=None):
@@ -365,7 +389,6 @@ async def _0x_search(query: str):
             if not res:
                 return None
             stream_url = res.get('url')
-            # If direct url not present or not streamable, look in formats
             if not stream_url and 'formats' in res and res['formats']:
                 audio_formats = [
                     f for f in res['formats']
@@ -378,7 +401,6 @@ async def _0x_search(query: str):
                     if valid_formats:
                         stream_url = valid_formats[-1]['url']
             
-            # If still missing stream_url, try extracting single item url
             if not stream_url and res.get('webpage_url'):
                 try:
                     with YoutubeDL(opts) as ydl_inner:
@@ -400,40 +422,27 @@ async def _0x_search(query: str):
                 'uploader': res.get('uploader') or res.get('artist') or 'Unknown Artist'
             }
 
-        # Attempt with android and ios mobile APIs
         attempts = [(False, ['android', 'ios']), (False, ['android'])]
         if has_cookie:
             attempts.append((True, ['android', 'ios']))
 
-        for use_ck, clients in attempts:
-            opts = _get_opts(use_cookie=use_ck, clients=clients)
-            with YoutubeDL(opts) as ydl:
+        for target_url in video_urls:
+            for use_ck, clients in attempts:
+                opts = _get_opts(use_cookie=use_ck, clients=clients)
                 try:
-                    info = ydl.extract_info(search_query, download=False)
-                    if info:
-                        if 'entries' in info and info['entries']:
-                            parsed = _resolve_result(info['entries'][0], opts)
-                            if parsed and parsed.get('stream_url'):
-                                return parsed
-                        elif 'entries' not in info:
-                            parsed = _resolve_result(info, opts)
-                            if parsed and parsed.get('stream_url'):
-                                return parsed
+                    with YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(target_url, download=False)
+                        if info:
+                            if 'entries' in info and info['entries']:
+                                parsed = _resolve_result(info['entries'][0], opts)
+                                if parsed and parsed.get('stream_url'):
+                                    return parsed
+                            elif 'entries' not in info:
+                                parsed = _resolve_result(info, opts)
+                                if parsed and parsed.get('stream_url'):
+                                    return parsed
                 except Exception as e:
-                    _0x_log.error(f"Search attempt error (cookie={use_ck}): {e}")
-
-                if not is_link:
-                    try:
-                        alt_query = f"ytsearch3:{query}"
-                        info = ydl.extract_info(alt_query, download=False)
-                        if info and 'entries' in info and info['entries']:
-                            for entry in info['entries']:
-                                if entry:
-                                    parsed = _resolve_result(entry, opts)
-                                    if parsed and parsed.get('stream_url'):
-                                        return parsed
-                    except Exception as e:
-                        _0x_log.error(f"Fallback attempt error: {e}")
+                    _0x_log.error(f"Search extract error: {e}")
 
         return None
 
