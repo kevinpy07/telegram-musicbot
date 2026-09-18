@@ -475,23 +475,27 @@ async def _0x_search(query: str):
 async def _0x_stream(chat_id: int, song_dict: dict) -> bool:
     try:
         flags = getattr(MediaStream.Flags, "IGNORE", 0) if hasattr(MediaStream, "Flags") else 0
-        stream_kwargs = {
-            "audio_parameters": AudioQuality.HIGH,
-            "ffmpeg_parameters": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -vn"
-        }
-        if flags:
-            stream_kwargs["video_flags"] = flags
+        audio_param = getattr(AudioQuality, "HIGH", None) or getattr(AudioQuality, "STUDIO", None)
 
         try:
-            await _0x_call.play(chat_id, MediaStream(song_dict['stream_url'], **stream_kwargs))
-        except TypeError:
-            await _0x_call.play(
-                chat_id,
-                MediaStream(
+            stream = MediaStream(
+                song_dict['stream_url'],
+                audio_parameters=audio_param,
+                video_flags=flags if flags else 0,
+                ffmpeg_parameters="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+            )
+            await _0x_call.play(chat_id, stream)
+        except Exception:
+            try:
+                stream = MediaStream(
                     song_dict['stream_url'],
                     audio_parameters=AudioQuality.HIGH
                 )
-            )
+                await _0x_call.play(chat_id, stream)
+            except Exception:
+                stream = MediaStream(song_dict['stream_url'])
+                await _0x_call.play(chat_id, stream)
+        
         _0x_q_set_curr(chat_id, song_dict)
         return True
     except Exception as e:
