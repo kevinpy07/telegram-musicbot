@@ -338,29 +338,63 @@ async def _0x_search(query: str):
         video_urls = [query] if is_link else []
         
         if not is_link:
-            # 1. Primary Method: Direct YouTube HTML Scraping
+            # 1. Primary Method: YouTube Innertube API (official client endpoint, never blocked)
             try:
-                search_url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(query)
+                innertube_url = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
+                payload = json.dumps({
+                    "context": {
+                        "client": {
+                            "clientName": "WEB",
+                            "clientVersion": "2.20240401.01.00",
+                            "hl": "en",
+                            "gl": "US"
+                        }
+                    },
+                    "query": query
+                }).encode("utf-8")
                 req = urllib.request.Request(
-                    search_url,
+                    innertube_url,
+                    data=payload,
                     headers={
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                        "Accept-Language": "en-US,en;q=0.9",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                        "Content-Type": "application/json"
                     }
                 )
                 with urllib.request.urlopen(req, timeout=6) as resp:
-                    html = resp.read().decode("utf-8", errors="ignore")
-                    ids = re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', html)
+                    content = resp.read().decode("utf-8", errors="ignore")
+                    ids = re.findall(r'"videoId":\s*"([^"]{11})"', content)
                     if ids:
                         seen = set()
                         unique_ids = [x for x in ids if not (x in seen or seen.add(x))]
                         for vid in unique_ids[:5]:
                             video_urls.append(f"https://www.youtube.com/watch?v={vid}")
             except Exception as e:
-                _0x_log.error(f"HTML search error: {e}")
+                _0x_log.error(f"Innertube search error: {e}")
 
-            # 2. Secondary Method: Public Invidious / Piped search fallback if HTML blocked
+            # 2. Secondary Method: Direct YouTube HTML Scraping
+            if not video_urls:
+                try:
+                    search_url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(query)
+                    req = urllib.request.Request(
+                        search_url,
+                        headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                            "Accept-Language": "en-US,en;q=0.9",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                        }
+                    )
+                    with urllib.request.urlopen(req, timeout=6) as resp:
+                        html = resp.read().decode("utf-8", errors="ignore")
+                        ids = re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', html)
+                        if ids:
+                            seen = set()
+                            unique_ids = [x for x in ids if not (x in seen or seen.add(x))]
+                            for vid in unique_ids[:5]:
+                                video_urls.append(f"https://www.youtube.com/watch?v={vid}")
+                except Exception as e:
+                    _0x_log.error(f"HTML search error: {e}")
+
+            # 3. Tertiary Method: Public Invidious search fallback
             if not video_urls:
                 for invidious in ["https://inv.nadeko.net/api/v1/search?q=", "https://invidious.nerdvpn.de/api/v1/search?q="]:
                     try:
