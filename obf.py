@@ -343,7 +343,7 @@ async def _0x_search(query: str):
             if clients is None:
                 clients = ['android', 'ios']
             opts = {
-                'format': 'bestaudio/best/18/22/17/best',
+                'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18/22/best',
                 'noplaylist': True,
                 'nocheckcertificate': True,
                 'ignoreerrors': True,
@@ -441,13 +441,24 @@ async def _0x_search(query: str):
 
 async def _0x_stream(chat_id: int, song_dict: dict) -> bool:
     try:
-        await _0x_call.play(
-            chat_id,
-            MediaStream(
-                song_dict['stream_url'],
-                audio_parameters=AudioQuality.HIGH
+        flags = getattr(MediaStream.Flags, "IGNORE", 0) if hasattr(MediaStream, "Flags") else 0
+        stream_kwargs = {
+            "audio_parameters": AudioQuality.HIGH,
+            "ffmpeg_parameters": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -vn"
+        }
+        if flags:
+            stream_kwargs["video_flags"] = flags
+
+        try:
+            await _0x_call.play(chat_id, MediaStream(song_dict['stream_url'], **stream_kwargs))
+        except TypeError:
+            await _0x_call.play(
+                chat_id,
+                MediaStream(
+                    song_dict['stream_url'],
+                    audio_parameters=AudioQuality.HIGH
+                )
             )
-        )
         _0x_q_set_curr(chat_id, song_dict)
         return True
     except Exception as e:
