@@ -338,13 +338,15 @@ async def _0x_search(query: str):
         video_urls = [query] if is_link else []
         
         if not is_link:
+            # 1. Primary Method: Direct YouTube HTML Scraping
             try:
                 search_url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(query)
                 req = urllib.request.Request(
                     search_url,
                     headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept-Language": "en-US,en;q=0.9"
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
                     }
                 )
                 with urllib.request.urlopen(req, timeout=6) as resp:
@@ -353,10 +355,28 @@ async def _0x_search(query: str):
                     if ids:
                         seen = set()
                         unique_ids = [x for x in ids if not (x in seen or seen.add(x))]
-                        for vid in unique_ids[:3]:
+                        for vid in unique_ids[:5]:
                             video_urls.append(f"https://www.youtube.com/watch?v={vid}")
             except Exception as e:
                 _0x_log.error(f"HTML search error: {e}")
+
+            # 2. Secondary Method: Public Invidious / Piped search fallback if HTML blocked
+            if not video_urls:
+                for invidious in ["https://inv.nadeko.net/api/v1/search?q=", "https://invidious.nerdvpn.de/api/v1/search?q="]:
+                    try:
+                        inv_req = urllib.request.Request(
+                            f"{invidious}{urllib.parse.quote(query)}&type=video",
+                            headers={"User-Agent": "Mozilla/5.0"}
+                        )
+                        with urllib.request.urlopen(inv_req, timeout=5) as inv_resp:
+                            data = json.loads(inv_resp.read().decode("utf-8"))
+                            for item in data[:3]:
+                                if "videoId" in item:
+                                    video_urls.append(f"https://www.youtube.com/watch?v={item['videoId']}")
+                        if video_urls:
+                            break
+                    except Exception:
+                        pass
 
         if not video_urls:
             video_urls = [f"ytsearch1:{query}"]
@@ -422,7 +442,11 @@ async def _0x_search(query: str):
                 'uploader': res.get('uploader') or res.get('artist') or 'Unknown Artist'
             }
 
-        attempts = [(False, ['android', 'ios']), (False, ['android'])]
+        attempts = [
+            (False, ['android', 'ios']),
+            (False, ['android']),
+            (False, ['web', 'android'])
+        ]
         if has_cookie:
             attempts.append((True, ['android', 'ios']))
 
@@ -442,7 +466,7 @@ async def _0x_search(query: str):
                                 if parsed and parsed.get('stream_url'):
                                     return parsed
                 except Exception as e:
-                    _0x_log.error(f"Search extract error: {e}")
+                    _0x_log.error(f"Search extract error for {target_url}: {e}")
 
         return None
 
