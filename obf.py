@@ -341,9 +341,9 @@ async def _0x_search(query: str):
         
         def _get_opts(use_cookie=False, clients=None):
             if clients is None:
-                clients = ['android_vr', 'ios', 'android']
+                clients = ['android', 'ios']
             opts = {
-                'format': 'bestaudio/best',
+                'format': 'bestaudio/best/18/22/17/best',
                 'noplaylist': True,
                 'nocheckcertificate': True,
                 'ignoreerrors': True,
@@ -353,8 +353,7 @@ async def _0x_search(query: str):
                 'source_address': '0.0.0.0',
                 'extractor_args': {
                     'youtube': {
-                        'player_client': clients,
-                        'player_skip': ['webpage', 'configs', 'js']
+                        'player_client': clients
                     }
                 }
             }
@@ -401,10 +400,10 @@ async def _0x_search(query: str):
                 'uploader': res.get('uploader') or res.get('artist') or 'Unknown Artist'
             }
 
-        # Attempt first without cookies (cleanest on mobile APIs)
-        attempts = [(False, ['android_vr', 'ios', 'android']), (False, ['ios', 'android'])]
+        # Attempt with android and ios mobile APIs
+        attempts = [(False, ['android', 'ios']), (False, ['android'])]
         if has_cookie:
-            attempts.append((True, ['android_vr', 'ios', 'android']))
+            attempts.append((True, ['android', 'ios']))
 
         for use_ck, clients in attempts:
             opts = _get_opts(use_cookie=use_ck, clients=clients)
