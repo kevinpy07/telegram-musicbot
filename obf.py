@@ -462,7 +462,7 @@ async def _0x_stream(chat_id: int, song_dict: dict) -> bool:
         _0x_q_set_curr(chat_id, song_dict)
         return True
     except Exception as e:
-        _0x_log.error(f"Playback error: {e}")
+        _0x_log.error(f"Playback error for {chat_id}: {e}", exc_info=True)
         return False
 
 async def _0x_next(chat_id: int):
@@ -531,7 +531,8 @@ async def _0x_end_h(client, update):
 
 async def _0x_start(chat_id: int, song_dict: dict):
     queue = _0x_q_get(chat_id)
-    if not queue and chat_id not in (await _0x_call.calls):
+    current = _0x_q_get_curr(chat_id)
+    if not current and not queue:
         if not song_dict['stream_url']:
             resolved = await _0x_search(song_dict['query'])
             if not resolved:
