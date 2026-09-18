@@ -356,30 +356,32 @@ async def _0x_search(query: str):
         is_link = query.startswith("http://") or query.startswith("https://")
         search_query = query if is_link else f"ytsearch1:{query}"
         
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'noplaylist': True,
-            'nocheckcertificate': True,
-            'ignoreerrors': True,
-            'logtostderr': False,
-            'quiet': True,
-            'no_warnings': True,
-            'source_address': '0.0.0.0',
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android_vr', 'ios', 'android'],
-                    'player_skip': ['webpage', 'configs', 'js']
-                },
-                'youtubepartner': {
-                    'player_client': ['android_vr', 'ios', 'android'],
-                    'player_skip': ['webpage', 'configs', 'js']
+        has_cookie = os.path.exists(_0x_ck) and os.path.getsize(_0x_ck) > 10
+        
+        def _get_opts(use_cookie=True, clients=None):
+            if clients is None:
+                clients = ['android_vr', 'ios', 'android']
+            opts = {
+                'format': 'bestaudio/best',
+                'noplaylist': True,
+                'nocheckcertificate': True,
+                'ignoreerrors': True,
+                'logtostderr': False,
+                'quiet': True,
+                'no_warnings': True,
+                'source_address': '0.0.0.0',
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': clients,
+                        'player_skip': ['webpage', 'configs', 'js']
+                    }
                 }
             }
-        }
-        if os.path.exists(_0x_ck) and os.path.getsize(_0x_ck) > 10:
-            ydl_opts['cookiefile'] = _0x_ck
+            if use_cookie and has_cookie:
+                opts['cookiefile'] = _0x_ck
+            return opts
             
-        def _resolve_result(res):
+        def _resolve_result(res, opts):
             if not res:
                 return None
             stream_url = res.get('url')
@@ -399,7 +401,7 @@ async def _0x_search(query: str):
             # If still missing stream_url, try extracting single item url
             if not stream_url and res.get('webpage_url'):
                 try:
-                    with YoutubeDL(ydl_opts) as ydl_inner:
+                    with YoutubeDL(opts) as ydl_inner:
                         single_info = ydl_inner.extract_info(res['webpage_url'], download=False)
                         if single_info:
                             stream_url = single_info.get('url')
@@ -418,38 +420,43 @@ async def _0x_search(query: str):
                 'uploader': res.get('uploader') or res.get('artist') or 'Unknown Artist'
             }
 
-        with YoutubeDL(ydl_opts) as ydl:
-            # 1. Primary search / link extraction
-            try:
-                info = ydl.extract_info(search_query, download=False)
-                if info:
-                    if 'entries' in info:
-                        if info['entries']:
-                            parsed = _resolve_result(info['entries'][0])
+        # Try attempts: 1. With cookie (if exists), 2. Without cookie (in case cookie is expired/blocked)
+        attempts = [(True, ['android_vr', 'ios', 'android'])]
+        if has_cookie:
+            attempts.append((False, ['android_vr', 'ios', 'android']))
+        attempts.append((False, ['ios', 'android']))
+
+        for use_ck, clients in attempts:
+            opts = _get_opts(use_cookie=use_ck, clients=clients)
+            with YoutubeDL(opts) as ydl:
+                try:
+                    info = ydl.extract_info(search_query, download=False)
+                    if info:
+                        if 'entries' in info and info['entries']:
+                            parsed = _resolve_result(info['entries'][0], opts)
                             if parsed and parsed.get('stream_url'):
                                 return parsed
-                    else:
-                        parsed = _resolve_result(info)
-                        if parsed and parsed.get('stream_url'):
-                            return parsed
-            except Exception as e:
-                _0x_log.error(f"Primary extraction error: {e}")
-
-            # 2. Secondary search with standard ytsearch3 (fallback to top 3)
-            if not is_link:
-                try:
-                    alt_query = f"ytsearch3:{query}"
-                    info = ydl.extract_info(alt_query, download=False)
-                    if info and 'entries' in info and info['entries']:
-                        for entry in info['entries']:
-                            if entry:
-                                parsed = _resolve_result(entry)
-                                if parsed and parsed.get('stream_url'):
-                                    return parsed
+                        elif 'entries' not in info:
+                            parsed = _resolve_result(info, opts)
+                            if parsed and parsed.get('stream_url'):
+                                return parsed
                 except Exception as e:
-                    _0x_log.error(f"Secondary extraction error: {e}")
+                    _0x_log.error(f"Search attempt error (cookie={use_ck}): {e}")
 
-            return None
+                if not is_link:
+                    try:
+                        alt_query = f"ytsearch3:{query}"
+                        info = ydl.extract_info(alt_query, download=False)
+                        if info and 'entries' in info and info['entries']:
+                            for entry in info['entries']:
+                                if entry:
+                                    parsed = _resolve_result(entry, opts)
+                                    if parsed and parsed.get('stream_url'):
+                                        return parsed
+                    except Exception as e:
+                        _0x_log.error(f"Fallback attempt error: {e}")
+
+        return None
 
     return await asyncio.to_thread(_extract)
 
